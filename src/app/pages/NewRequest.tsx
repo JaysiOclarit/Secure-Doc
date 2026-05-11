@@ -12,6 +12,7 @@ import { useAuth } from '../context/AuthContext';
 import * as requestService from '../../services/requestService';
 import * as auditService from '../../services/auditService';
 import { handleError, validateRequestForm } from '../../utils/errorHandler';
+import * as offlineSyncService from '../../services/offlineSyncService';
 
 export default function NewRequest() {
   const navigate = useNavigate();
@@ -54,7 +55,23 @@ export default function NewRequest() {
       toast.success('Request submitted successfully!');
       navigate('/requests');
     } catch (err) {
-      handleError(err, 'request:create');
+      // Determine the error message without immediately showing a toast
+      const errorMsg = handleError(err, 'request:create', false);
+
+      // Check if it's a network error (matches the string in your errorHandler.ts)
+      if (errorMsg.includes('Network error')) {
+        offlineSyncService.addToQueue({
+          userId: user.id,
+          type: formData.documentType,
+          purpose: formData.purpose,
+          email: user.email || undefined
+        });
+        // Redirect to dashboard so the user isn't stuck on the form
+        navigate('/dashboard');
+      } else {
+        // If it's not a network error (e.g., validation or database failure), show standard error
+        toast.error(errorMsg);
+      }
     } finally {
       setLoading(false);
     }
